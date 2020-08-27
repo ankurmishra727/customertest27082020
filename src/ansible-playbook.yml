@@ -1,0 +1,161 @@
+---
+
+- name: run the playbook tasks on the localhost
+  hosts: 127.0.0.1
+  connection: local
+  become: yes
+
+  tasks:
+    - name: Install aptitude using apt
+      apt: name=aptitude state=latest update_cache=yes force_apt_get=yes
+
+    - name: Install required system packages
+      apt: name={{ item }} state=latest update_cache=yes
+      loop: [ 'apt-transport-https', 'ca-certificates', 'curl', 'software-properties-common', 'python3-pip', 'virtualenv', 'python3-setuptools', 'nfs-common']
+
+    - name: Add Docker GPG apt Key
+      apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        state: present
+
+    - name: Add Docker Repository
+      apt_repository:
+        repo: deb https://download.docker.com/linux/ubuntu bionic stable
+        state: present
+        mode: 666
+
+    - name: Update apt and install docker-ce
+      apt: update_cache=yes name=docker-ce state=latest
+
+    - name: Start docker service, if not started
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: add ubuntu user to docker group
+      user:
+        name: 'ubuntu'
+        groups: docker,sudo
+        append: yes
+
+    - name: install packages
+      apt: name={{ item }} state=latest update_cache=yes
+      loop: ['wget','bzip2','unzip', 'git', 'build-essential', 'libssl-dev']
+
+    - name: add openjdk-r ppa
+      apt_repository:
+        repo: 'ppa:openjdk-r/ppa'
+        state: present
+        update_cache: true
+        mode: 666
+
+    - name: install openjdk
+      apt:
+        name: "openjdk-8-jdk"
+        update_cache: true
+        state: present
+
+    - name: set openjdk as default java
+      alternatives:
+        name: java
+        path: "/usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java"
+
+    - name: add default-java symlink
+      file:
+        state: link
+        src: "java-8-openjdk-amd64"
+        dest: "/usr/lib/jvm/default-java"
+
+    - name: install pipenv
+      command: pip3 install pipenv
+
+    - name: install docker-compose
+      command: pip3 install docker-compose
+
+    - name: install awscli
+      command: pip install awscli
+
+    - name: download and unarchive packer
+      unarchive:
+        src: https://releases.hashicorp.com/packer/1.4.2/packer_1.4.2_linux_amd64.zip
+        dest: /usr/local/bin
+        remote_src: true
+        creates: /usr/local/bin/packer
+
+    - name: packer.io alias to packer
+      file:
+        src: /usr/local/bin/packer
+        dest: /usr/local/bin/packer.io
+        state: link
+
+    - name: checkout tfenv repo
+      git:
+        repo: 'https://github.com/tfutils/tfenv.git'
+        dest: /home/ubuntu/.tfenv
+        depth: 1
+        version: "v0.3.2"
+
+    - name: Create symbolic link for terrafrom
+      file:
+        src: "/home/ubuntu/.tfenv/bin/terraform"
+        dest: "/usr/local/bin/terraform"
+        state: link
+        owner: ubuntu
+        group: ubuntu
+        mode: '0550'
+
+    - name: Create symbolic link for tfenv
+      file:
+        src: "/home/ubuntu/.tfenv/bin/tfenv"
+        dest: "/usr/local/bin/tfenv"
+        state: link
+        owner: ubuntu
+        group: ubuntu
+        mode: '0550'
+
+    - name: install terraform 0.12.16
+      command: chdir=/home/ubuntu tfenv install 0.12.26
+
+    - name: checkout git-crypt repo
+      git:
+        repo: 'https://github.com/AGWA/git-crypt.git'
+        dest: /home/ubuntu/git-crypt
+        depth: 1
+        version: "0.6.0"
+
+    - name: build git-crypt
+      command: chdir=/home/ubuntu/git-crypt make
+
+    - name: install git-crypt
+      command: chdir=/home/ubuntu/git-crypt make install
+
+    - name: checkout aws/efs-utils repo
+      git:
+        repo: 'https://github.com/aws/efs-utils.git'
+        dest: /home/ubuntu/efs-utils
+        depth: 1
+        version: "v1.13"
+
+    - name: build efs-utils
+      command: chdir=/home/ubuntu/efs-utils ./build-deb.sh
+
+    - name: install efs-utils
+      apt:
+        deb: /home/ubuntu/efs-utils/build/amazon-efs-utils-1.13-1.deb
+       
+
+    - name: download and unarchive go
+      unarchive:
+        src: https://dl.google.com/go/go1.13.4.linux-amd64.tar.gz
+        dest: /usr/local
+        remote_src: true
+        creates: /usr/local/go
+
+    - name: add /usr/local/go/bin to path
+      lineinfile: >
+        dest=/etc/environment
+        state=present
+        backrefs=yes
+        regexp='PATH=(["]*)((?!.*?/usr/local/go/bin).*?)(["]*)$'
+        line="PATH=\1\2:/usr/local/go/bin\3"
