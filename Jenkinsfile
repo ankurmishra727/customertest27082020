@@ -1,12 +1,5 @@
 pipeline {
-    agent {
-        node {
-            label("app-t3medium")
-        }
-    }
-    options {
-        timestamps()
-    }
+  
     stages {
         stage('Prepare') {
             steps {
@@ -26,14 +19,7 @@ pipeline {
                 sh "make build"
             }
         }
-        stage('Test AMI') {
-            when {
-                expression { env.GIT_BRANCH == 'origin/master' }
-            }
-            steps {
-                sh "make test"
-            }
+
         }
     }
 }
-
