@@ -3,15 +3,14 @@ DATE:=$(shell date +%Y.%m.%d-%H.%M.%S)
 TAG:=$(DATE)-$(REV)
 .PHONY: build test
 
-# Tags
-DOMAIN:=samya
-AMI_ACCOUNTS:=322338739230
 
 validate:
-	packer validate src/worker_template.json
+        az login --service-principal --username "$azure_client_id" --password "$azure_client_secret" --tenant "$azure_tenant_id"
+	az account set --subscription "$azure_subscription_id"
+	az group create -l "${Location}" -n "${CustomerName}-RG"
+	packer validate -var "resourcegroupname=${CustomerName}" -var "location=${Location}" -var "imagename=${CustomerName}$(TAG)" src/worker_template.json
 
-build: validate
-	packer build -var "dest_ami_name=app-ami-$(TAG)" -var "domain=$(DOMAIN)" -var "git_sha=$(REV)" -var "ami_accounts=$(AMI_ACCOUNTS)"  src/worker_template.json
-
-test:
-	sh test/run.sh
+build: validate 
+        az login --service-principal --username "$azure_client_id" --password "$azure_client_secret" --tenant "$azure_tenant_id"
+	az account set --subscription "$azure_subscription_id"
+	packer build -var "resourcegroupname=${CustomerName}" -var "location=${Location}" -var "imagename=${CustomerName}$(TAG)"  src/worker_template.json
